@@ -7,12 +7,15 @@ load_dotenv()
 
 client = ApifyClient(os.getenv("APIFY_API_TOKEN"))
 
-def scrape_match(match_urls: list) -> list:
+def scrape_matches(urls: list) -> list:
+    """
+    Scrape des matchs via azzouzana/sofascore-scraper-pro
+    urls : liste de strings directes (pas de dicts)
+    """
     run_input = {
-        "startUrls": match_urls,  # liste de strings, pas de dicts
+        "startUrls": urls,
     }
-
-    print(f"Scraping de {len(match_urls)} match(s)...")
+    print(f"Scraping de {len(urls)} match(s)...")
     run = client.actor("azzouzana/sofascore-scraper-pro").call(run_input=run_input)
 
     results = []
@@ -24,19 +27,20 @@ def scrape_match(match_urls: list) -> list:
 if __name__ == "__main__":
     urls = [
         "https://www.sofascore.com/football/match/atletico-madrid-real-madrid/EgbsLgb",
+        "https://www.sofascore.com/football/match/real-madrid-rayo-vallecano/Egbsbhb",
+        "https://www.sofascore.com/football/match/real-madrid-osasuna/rgbsEgb",
+        "https://www.sofascore.com/football/match/atletico-madrid-real-madrid-b/EgbsIgb",
     ]
 
-    matches = scrape_match(urls)
-    print(f"{len(matches)} résultats récupérés")
+    matches = scrape_matches(urls)
+    print(f"{len(matches)} matchs récupérés")
 
     os.makedirs("data/raw", exist_ok=True)
-    with open("data/raw/match_raw.json", "w", encoding="utf-8") as f:
+    with open("data/raw/recent_matches_raw.json", "w", encoding="utf-8") as f:
         json.dump(matches, f, indent=2, ensure_ascii=False)
 
-    print("Sauvegardé dans data/raw/match_raw.json")
-    
-    if matches:
-        m = matches[0]["data"]["event"]
-        print(f"\n{m['homeTeam']['name']} {m['homeScore']['current']} - {m['awayScore']['current']} {m['awayTeam']['name']}")
-        print(f"Stade : {m['venue']['name']} ({m['attendance']} spectateurs)")
-        print(f"Buts : {len([i for i in matches[0]['data']['incidents'] if i.get('incidentType') == 'goal'])}")
+    print("Sauvegardé dans data/raw/recent_matches_raw.json")
+    for m in matches:
+        if "event" in m.get("data", {}):
+            e = m["data"]["event"]
+            print(f"  {e['homeTeam']['name']} {e['homeScore']['current']} - {e['awayScore']['current']} {e['awayTeam']['name']}")
