@@ -1,0 +1,5 @@
+apify-client==1.8.1
+rapidfuzz==3.14.5
+python-dateutil==2.9.0
+python-dotenv==1.0.1
+groq==0.9.0
