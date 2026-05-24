@@ -19,7 +19,7 @@ def scrape_matches(urls: list) -> list:
     run = client.actor("azzouzana/sofascore-scraper-pro").call(run_input=run_input)
 
     results = []
-    for item in client.dataset(run["defaultDatasetId"]).iterate_items():
+    for item in client.dataset(run["defaultDatasetId"]).iterate_items(): # type: ignore
         results.append(item)
     return results
 

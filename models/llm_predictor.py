@@ -126,7 +126,7 @@ Réponds UNIQUEMENT avec ce JSON :
         temperature=0.1,  # Low temperature = réponses stables et cohérentes
     )
 
-    raw = response.choices[0].message.content.strip()
+    raw = response.choices[0].message.content.strip() # type: ignore
     
     # Nettoyer si besoin
     if raw.startswith("```"):
