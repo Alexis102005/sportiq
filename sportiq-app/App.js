@@ -4,7 +4,7 @@ import {
   TouchableOpacity, ScrollView, ActivityIndicator
 } from 'react-native';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = 'https://sportiq-production.up.railway.app';
 
 const STARS = (n) => '⭐'.repeat(n) + '☆'.repeat(5 - n);
 

@@ -28,3 +28,12 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+sportiq-app/node_modules/
+sportiq-app/.expo/sportiq-app/node_modules/
+sportiq-app/.expo/
+sportiq-app/.claude/
+__pycache__/
+*.pyc
+.vscode/
+data/
+*.egg-info/
