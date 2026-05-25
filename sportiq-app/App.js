@@ -5,15 +5,37 @@ import {
 } from 'react-native';
 
 const API_URL = 'https://sportiq-production.up.railway.app';
-
 const STARS = (n) => '⭐'.repeat(n) + '☆'.repeat(5 - n);
 
+const SPORTS = [
+  { key: 'football', label: '⚽ Football' },
+  { key: 'basketball', label: '🏀 Basketball' },
+  { key: 'tennis', label: '🎾 Tennis' },
+];
+
 export default function App() {
+  const [sport, setSport] = useState('football');
   const [home, setHome] = useState('Real Madrid');
   const [away, setAway] = useState('Atlético Madrid');
   const [loading, setLoading] = useState(false);
   const [prediction, setPrediction] = useState(null);
   const [error, setError] = useState(null);
+
+  const onSportChange = (key) => {
+    setSport(key);
+    setPrediction(null);
+    setError(null);
+    if (key === 'basketball') {
+      setHome('Los Angeles Lakers');
+      setAway('Boston Celtics');
+    } else if (key === 'tennis') {
+      setHome('Novak Djokovic');
+      setAway('Carlos Alcaraz');
+    } else {
+      setHome('Real Madrid');
+      setAway('Atlético Madrid');
+    }
+  };
 
   const predict = async () => {
     setLoading(true);
@@ -21,7 +43,7 @@ export default function App() {
     setPrediction(null);
     try {
       const res = await fetch(
-        `${API_URL}/predict?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}`
+        `${API_URL}/predict?home=${encodeURIComponent(home)}&away=${encodeURIComponent(away)}&sport=${sport}`
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Erreur API');
@@ -35,10 +57,24 @@ export default function App() {
 
   return (
     <ScrollView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.logo}>🏆 Sportiq</Text>
         <Text style={styles.subtitle}>Prédictions IA</Text>
+      </View>
+
+      {/* Sélecteur de sport */}
+      <View style={styles.sportSelector}>
+        {SPORTS.map(s => (
+          <TouchableOpacity
+            key={s.key}
+            style={[styles.sportBtn, sport === s.key && styles.sportBtnActive]}
+            onPress={() => onSportChange(s.key)}
+          >
+            <Text style={[styles.sportBtnText, sport === s.key && styles.sportBtnTextActive]}>
+              {s.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* Input */}
@@ -47,7 +83,7 @@ export default function App() {
           style={styles.input}
           value={home}
           onChangeText={setHome}
-          placeholder="Équipe domicile"
+          placeholder={sport === 'tennis' ? 'Joueur 1' : 'Équipe domicile'}
           placeholderTextColor="#666"
         />
         <Text style={styles.vs}>VS</Text>
@@ -55,7 +91,7 @@ export default function App() {
           style={styles.input}
           value={away}
           onChangeText={setAway}
-          placeholder="Équipe extérieur"
+          placeholder={sport === 'tennis' ? 'Joueur 2' : 'Équipe extérieur'}
           placeholderTextColor="#666"
         />
         <TouchableOpacity style={styles.button} onPress={predict} disabled={loading}>
@@ -65,26 +101,21 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {/* Loading */}
       {loading && <ActivityIndicator size="large" color="#00ff88" style={{ margin: 20 }} />}
 
-      {/* Error */}
       {error && (
         <View style={styles.errorCard}>
           <Text style={styles.errorText}>⚠️ {error}</Text>
         </View>
       )}
 
-      {/* Résultats */}
       {prediction && (
         <View>
-          {/* Titre match */}
           <View style={styles.matchCard}>
             <Text style={styles.matchTitle}>{prediction.match}</Text>
             <Text style={styles.analyse}>{prediction.analyse}</Text>
           </View>
 
-          {/* Prédictions */}
           <Text style={styles.sectionTitle}>Prédictions</Text>
           {Object.entries(prediction.predictions || {}).map(([key, val]) => (
             <View key={key} style={styles.predCard}>
@@ -98,7 +129,6 @@ export default function App() {
             </View>
           ))}
 
-          {/* Paris impossibles */}
           {prediction.paris_impossibles?.length > 0 && (
             <>
               <Text style={styles.sectionTitle}>⚠️ Données insuffisantes</Text>
@@ -122,16 +152,15 @@ const styles = StyleSheet.create({
   header: { alignItems: 'center', paddingVertical: 30 },
   logo: { fontSize: 32, fontWeight: 'bold', color: '#00ff88' },
   subtitle: { fontSize: 14, color: '#666', marginTop: 4 },
+  sportSelector: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  sportBtn: { flex: 1, padding: 10, borderRadius: 8, backgroundColor: '#1a1a2e', marginHorizontal: 4, alignItems: 'center' },
+  sportBtnActive: { backgroundColor: '#00ff88' },
+  sportBtnText: { color: '#aaa', fontSize: 12, fontWeight: 'bold' },
+  sportBtnTextActive: { color: '#0a0a1a' },
   card: { backgroundColor: '#1a1a2e', borderRadius: 12, padding: 16, marginBottom: 16 },
-  input: {
-    backgroundColor: '#0a0a1a', color: '#fff', borderRadius: 8,
-    padding: 12, marginBottom: 8, fontSize: 16, borderWidth: 1, borderColor: '#333'
-  },
+  input: { backgroundColor: '#0a0a1a', color: '#fff', borderRadius: 8, padding: 12, marginBottom: 8, fontSize: 16, borderWidth: 1, borderColor: '#333' },
   vs: { textAlign: 'center', color: '#666', fontSize: 16, marginVertical: 4 },
-  button: {
-    backgroundColor: '#00ff88', borderRadius: 8,
-    padding: 14, alignItems: 'center', marginTop: 8
-  },
+  button: { backgroundColor: '#00ff88', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 8 },
   buttonText: { color: '#0a0a1a', fontWeight: 'bold', fontSize: 16 },
   errorCard: { backgroundColor: '#2a1a1a', borderRadius: 12, padding: 16, marginBottom: 12 },
   errorText: { color: '#ff4444' },

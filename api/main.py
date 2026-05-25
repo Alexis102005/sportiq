@@ -29,7 +29,48 @@ def root():
 
 
 @app.get("/predict")
-def predict(home: str, away: str, urls: str = ""):
+def predict(home: str, away: str, sport: str = "football", urls: str = ""):
+    """
+    Prédit un match entre deux équipes.
+    
+    Params:
+    - home  : équipe/joueur domicile
+    - away  : équipe/joueur extérieur  
+    - sport : football | basketball | tennis (défaut: football)
+    - urls  : URLs des matchs récents séparées par virgule
+    """
+    try:
+        cache_key = f"{sport}-{home}-{away}".lower().replace(" ", "-")
+        cache_path = f"data/predictions/{cache_key}.json"
+        os.makedirs("data/predictions", exist_ok=True)
+
+        if os.path.exists(cache_path):
+            print(f"Cache trouvé — lecture du cache")
+            with open(cache_path, encoding="utf-8") as f:
+                return json.load(f)
+
+        if not urls:
+            raise HTTPException(
+                status_code=400,
+                detail="URLs des matchs récents requises. Passez ?urls=url1,url2,..."
+            )
+
+        match_urls = [u.strip() for u in urls.split(",")]
+        raw_matches = scrape_matches(match_urls)
+
+        if not raw_matches:
+            raise HTTPException(status_code=404, detail="Aucun match trouvé")
+
+        from pipeline.features import compute_features
+        features = compute_features(raw_matches, home, away, sport) # type: ignore
+        prediction = predict_match(features)
+
+        return prediction
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     """
     Prédit un match entre deux équipes.
     
