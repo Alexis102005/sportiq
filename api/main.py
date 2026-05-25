@@ -3,6 +3,7 @@ import json
 import sys
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from scrapers.odds_scraper import get_upcoming_matches
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -122,3 +123,24 @@ def health():
         "status": "healthy",
         "cache_count": len(os.listdir("data/predictions")) if os.path.exists("data/predictions") else 0
     }
+
+@app.get("/today/{sport}")
+def today(sport: str):
+    """
+    Retourne les matchs du jour avec cotes pour un sport donné.
+    sport: football | basketball | tennis
+    """
+    try:
+        matches = get_upcoming_matches(sport)
+        
+        if not matches:
+            return {"sport": sport, "matches": [], "message": "Aucun match trouvé"}
+
+        return {
+            "sport": sport,
+            "total": len(matches),
+            "matches": matches
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
