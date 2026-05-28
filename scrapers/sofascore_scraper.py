@@ -44,3 +44,26 @@ if __name__ == "__main__":
         if "event" in m.get("data", {}):
             e = m["data"]["event"]
             print(f"  {e['homeTeam']['name']} {e['homeScore']['current']} - {e['awayScore']['current']} {e['awayTeam']['name']}")
+
+def find_recent_matches(team_home: str, team_away: str, sport: str = "football") -> list:
+    """
+    Cherche automatiquement les matchs récents des deux équipes sur SofaScore.
+    Utilise une liste de ligues connues pour construire les URLs de recherche.
+    """
+    # URLs de recherche par sport
+    search_urls = {
+        "football": [
+            f"https://www.sofascore.com/search/all/?q={team_home.replace(' ', '+')}",
+            f"https://www.sofascore.com/search/all/?q={team_away.replace(' ', '+')}",
+        ],
+        "basketball": [
+            f"https://www.sofascore.com/search/all/?q={team_home.replace(' ', '+')}",
+        ],
+        "tennis": [
+            f"https://www.sofascore.com/search/all/?q={team_home.replace(' ', '+')}",
+        ],
+    }
+
+    urls = search_urls.get(sport, search_urls["football"])
+    results = scrape_matches(urls)
+    return results

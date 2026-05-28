@@ -1,6 +1,5 @@
 import os
 import json
-import sys
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from scrapers.odds_scraper import get_upcoming_matches
@@ -30,84 +29,33 @@ def root():
 
 
 @app.get("/predict")
-def predict(home: str, away: str, sport: str = "football", urls: str = ""):
-    """
-    Prédit un match entre deux équipes.
-    
-    Params:
-    - home  : équipe/joueur domicile
-    - away  : équipe/joueur extérieur  
-    - sport : football | basketball | tennis (défaut: football)
-    - urls  : URLs des matchs récents séparées par virgule
-    """
+def predict(home: str, away: str, sport: str = "football"):
     try:
         cache_key = f"{sport}-{home}-{away}".lower().replace(" ", "-")
         cache_path = f"data/predictions/{cache_key}.json"
         os.makedirs("data/predictions", exist_ok=True)
 
         if os.path.exists(cache_path):
-            print(f"Cache trouvé — lecture du cache")
+            print(f"Cache trouvé")
             with open(cache_path, encoding="utf-8") as f:
                 return json.load(f)
 
-        if not urls:
-            raise HTTPException(
-                status_code=400,
-                detail="URLs des matchs récents requises. Passez ?urls=url1,url2,..."
-            )
-
-        match_urls = [u.strip() for u in urls.split(",")]
-        raw_matches = scrape_matches(match_urls)
-
-        if not raw_matches:
-            raise HTTPException(status_code=404, detail="Aucun match trouvé")
-
-        from pipeline.features import compute_features
-        features = compute_features(raw_matches, home, away, sport) # type: ignore
-        prediction = predict_match(features)
-
-        return prediction
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    """
-    Prédit un match entre deux équipes.
-    
-    Params:
-    - home : nom équipe domicile (ex: Real Madrid)
-    - away : nom équipe extérieur (ex: Barcelona)
-    - urls : URLs des matchs récents séparées par virgule (optionnel)
-    """
-    try:
-        # Vérifier le cache d'abord
-        cache_key = f"{home}-{away}".lower().replace(" ", "-")
-        cache_path = f"data/predictions/{cache_key}.json"
-
-        if os.path.exists(cache_path):
-            with open(cache_path, encoding="utf-8") as f:
-                return json.load(f)
-
-        # Scraper les matchs si URLs fournies
-        if not urls:
-            raise HTTPException(
-                status_code=400,
-                detail="URLs des matchs récents requises. Passez ?urls=url1,url2,..."
-            )
-
-        match_urls = [u.strip() for u in urls.split(",")]
-        raw_matches = scrape_matches(match_urls)
+        # Chercher automatiquement les matchs récents des deux équipes
+        print(f"Recherche des matchs récents pour {home} et {away}...")
+        from scrapers.sofascore_scraper import find_recent_matches
+        raw_matches = find_recent_matches(home, away, sport)
 
         if not raw_matches:
             raise HTTPException(
                 status_code=404,
-                detail="Aucun match trouvé avec ces URLs"
+                detail=f"Impossible de trouver les matchs récents pour {home} et {away}"
             )
 
-        # Pipeline complet
         features = compute_features(raw_matches, home, away)
         prediction = predict_match(features)
+
+        with open(cache_path, "w", encoding="utf-8") as f:
+            json.dump(prediction, f, ensure_ascii=False, indent=2)
 
         return prediction
 
