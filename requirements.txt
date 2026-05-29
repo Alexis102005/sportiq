@@ -6,3 +6,4 @@ groq
 rapidfuzz
 python-dateutil
 httpx
+curl_cffi

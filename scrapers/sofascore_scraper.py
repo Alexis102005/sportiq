@@ -1,22 +1,162 @@
 import os
 import json
+from curl_cffi import requests as cf_requests
 from apify_client import ApifyClient
 from dotenv import load_dotenv
 
 load_dotenv()
 
-client = ApifyClient(os.getenv("APIFY_API_TOKEN"))
+# Validate Apify token early and provide clearer diagnostics
+APIFY_TOKEN = os.getenv("APIFY_API_TOKEN")
+if not APIFY_TOKEN:
+    raise RuntimeError(
+        "APIFY_API_TOKEN is not set. Please add it to your environment or .env file."
+    )
+
+
+def _mask_token(t: str) -> str:
+    if not t or len(t) < 8:
+        return "***REDACTED***"
+    return f"{t[:4]}...{t[-4:]}"
+
+print(f"Using Apify token: {_mask_token(APIFY_TOKEN)}")
+client = ApifyClient(APIFY_TOKEN)
+
+# Headers qui imitent un vrai navigateur
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9,fr;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://www.sofascore.com/",
+    "Origin": "https://www.sofascore.com",
+    "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "Connection": "keep-alive",
+}
+
+
+def search_team(team_name: str, sport: str = "football") -> dict:
+    """Cherche une équipe par nom et retourne son ID SofaScore"""
+    url = f"https://www.sofascore.com/api/v1/search/teams?q={team_name}&page=0"
+    response = cf_requests.get(
+        url,
+        headers=HEADERS,
+        timeout=10,
+        impersonate="chrome120",
+    )
+
+    print(f"Status: {response.status_code}")
+
+    if response.status_code != 200:
+        print(f"Erreur {response.status_code} pour {team_name}")
+        return None
+
+    data = response.json()
+    results = data.get("results", [])
+
+    # Prendre le premier résultat qui correspond au sport
+    sport_map = {"football": 1, "basketball": 2, "tennis": 5}
+    sport_id = sport_map.get(sport, 1)
+
+    for result in results:
+        entity = result.get("entity", {})
+        entity_sport = entity.get("sport", {})
+        if entity_sport.get("id") == sport_id:
+            return {
+                "id": entity.get("id"),
+                "name": entity.get("name"),
+                "slug": entity.get("slug"),
+            }
+    return None
+
+
+def get_team_recent_matches(team_id: int, pages: int = 2) -> list:
+    """Récupère les derniers matchs d'une équipe via l'API SofaScore"""
+    matches = []
+    for page in range(pages):
+        url = f"https://www.sofascore.com/api/v1/team/{team_id}/events/last/{page}"
+        response = cf_requests.get(
+            url,
+            headers=HEADERS,
+            timeout=10,
+            impersonate="chrome120",
+        )
+
+        if response.status_code != 200:
+            print(f"Erreur {response.status_code} pour team_id {team_id} page {page}")
+            break
+
+        data = response.json()
+        events = data.get("events", [])
+        if not events:
+            break
+        matches.extend(events)
+        print(f"  Page {page}: {len(events)} matchs")
+
+    return matches
+
+
+def find_recent_matches(team_home: str, team_away: str, sport: str = "football") -> list:
+    """
+    Trouve automatiquement les matchs récents des deux équipes
+    """
+    print(f"Recherche de {team_home}...")
+    home_team = search_team(team_home, sport)
+
+    print(f"Recherche de {team_away}...")
+    away_team = search_team(team_away, sport)
+
+    if not home_team and not away_team:
+        print("Aucune équipe trouvée")
+        return []
+
+    all_events = []
+
+    if home_team:
+        print(f"Trouvé: {home_team['name']} (ID: {home_team['id']})")
+        events = get_team_recent_matches(home_team["id"])
+        # Convertir au format attendu par le pipeline
+        for e in events:
+            all_events.append({"data": {"event": e}, "url": ""})
+
+    if away_team:
+        print(f"Trouvé: {away_team['name']} (ID: {away_team['id']})")
+        events = get_team_recent_matches(away_team["id"])
+        for e in events:
+            all_events.append({"data": {"event": e}, "url": ""})
+
+    return all_events
+
 
 def scrape_matches(urls: list) -> list:
-    """
-    Scrape des matchs via azzouzana/sofascore-scraper-pro
+    """Scrape des matchs via azzouzana/sofascore-scraper-pro
     urls : liste de strings directes (pas de dicts)
     """
-    run_input = {
-        "startUrls": urls,
-    }
+    run_input = {"startUrls": urls}
     print(f"Scraping de {len(urls)} match(s)...")
-    run = client.actor("azzouzana/sofascore-scraper-pro").call(run_input=run_input)
+    try:
+        run = client.actor("azzouzana/sofascore-scraper-pro").call(run_input=run_input)
+    except Exception as e:
+        print("Apify actor call failed:", repr(e))
+        # Try to surface HTTP / response details if available
+        if hasattr(e, "status_code"):
+            print("Status code:", getattr(e, "status_code"))
+        if hasattr(e, "response") and getattr(e, "response") is not None:
+            try:
+                resp = getattr(e, "response")
+                # Some exception objects expose .text or .content
+                if hasattr(resp, "text"):
+                    print("Response text:", resp.text)
+                elif hasattr(resp, "content"):
+                    print("Response content:", resp.content)
+            except Exception:
+                pass
+        raise
 
     results = []
     for item in client.dataset(run["defaultDatasetId"]).iterate_items(): # type: ignore
@@ -25,45 +165,14 @@ def scrape_matches(urls: list) -> list:
 
 
 if __name__ == "__main__":
-    urls = [
-        "https://www.sofascore.com/football/match/atletico-madrid-real-madrid/EgbsLgb",
-        "https://www.sofascore.com/football/match/real-madrid-rayo-vallecano/Egbsbhb",
-        "https://www.sofascore.com/football/match/real-madrid-osasuna/rgbsEgb",
-        "https://www.sofascore.com/football/match/atletico-madrid-real-madrid-b/EgbsIgb",
-    ]
+    print("Test recherche Arsenal...")
+    team = search_team("Arsenal", "football")
+    print(f"Résultat: {team}")
 
-    matches = scrape_matches(urls)
-    print(f"{len(matches)} matchs récupérés")
-
-    os.makedirs("data/raw", exist_ok=True)
-    with open("data/raw/recent_matches_raw.json", "w", encoding="utf-8") as f:
-        json.dump(matches, f, indent=2, ensure_ascii=False)
-
-    print("Sauvegardé dans data/raw/recent_matches_raw.json")
-    for m in matches:
-        if "event" in m.get("data", {}):
-            e = m["data"]["event"]
-            print(f"  {e['homeTeam']['name']} {e['homeScore']['current']} - {e['awayScore']['current']} {e['awayTeam']['name']}")
-
-def find_recent_matches(team_home: str, team_away: str, sport: str = "football") -> list:
-    """
-    Cherche automatiquement les matchs récents des deux équipes sur SofaScore.
-    Utilise une liste de ligues connues pour construire les URLs de recherche.
-    """
-    # URLs de recherche par sport
-    search_urls = {
-        "football": [
-            f"https://www.sofascore.com/search/all/?q={team_home.replace(' ', '+')}",
-            f"https://www.sofascore.com/search/all/?q={team_away.replace(' ', '+')}",
-        ],
-        "basketball": [
-            f"https://www.sofascore.com/search/all/?q={team_home.replace(' ', '+')}",
-        ],
-        "tennis": [
-            f"https://www.sofascore.com/search/all/?q={team_home.replace(' ', '+')}",
-        ],
-    }
-
-    urls = search_urls.get(sport, search_urls["football"])
-    results = scrape_matches(urls)
-    return results
+    if team:
+        print(f"\nMatchs récents de {team['name']}...")
+        matches = get_team_recent_matches(team["id"], pages=1)
+        print(f"{len(matches)} matchs trouvés")
+        if matches:
+            m = matches[0]
+            print(f"Dernier match: {m.get('homeTeam', {}).get('name')} vs {m.get('awayTeam', {}).get('name')}")
