@@ -41,16 +41,32 @@ HEADERS = {
 
 
 def search_team(team_name: str, sport: str = "football") -> dict:
-    """Cherche une équipe par nom et retourne son ID SofaScore"""
-    url = f"https://www.sofascore.com/api/v1/search/teams?q={team_name}&page=0"
-    response = cf_requests.get(
-        url,
-        headers=HEADERS,
-        timeout=10,
-        impersonate="chrome120",
-    )
+    """Cherche une équipe ou joueur par nom"""
 
-    print(f"Status: {response.status_code}")
+    # Pour le tennis, chercher dans les joueurs
+    if sport == "tennis":
+        url = f"https://www.sofascore.com/api/v1/search/players?q={team_name}&page=0"
+        response = cf_requests.get(
+            url,
+            impersonate="chrome120",
+            timeout=10
+        )
+        print(f"Status: {response.status_code}")
+        if response.status_code == 200:
+            data = response.json()
+            results = data.get("results", [])
+            if results:
+                entity = results[0].get("entity", {})
+                return {
+                    "id": entity.get("id"),
+                    "name": entity.get("name"),
+                    "slug": entity.get("slug"),
+                }
+        return None
+
+    # Pour football et basketball
+    url = f"https://www.sofascore.com/api/v1/search/teams?q={team_name}&page=0"
+    response = cf_requests.get(url, impersonate="chrome120", timeout=10)
 
     if response.status_code != 200:
         print(f"Erreur {response.status_code} pour {team_name}")
@@ -59,14 +75,12 @@ def search_team(team_name: str, sport: str = "football") -> dict:
     data = response.json()
     results = data.get("results", [])
 
-    # Prendre le premier résultat qui correspond au sport
     sport_map = {"football": 1, "basketball": 2, "tennis": 5}
     sport_id = sport_map.get(sport, 1)
 
     for result in results:
         entity = result.get("entity", {})
-        entity_sport = entity.get("sport", {})
-        if entity_sport.get("id") == sport_id:
+        if entity.get("sport", {}).get("id") == sport_id:
             return {
                 "id": entity.get("id"),
                 "name": entity.get("name"),
@@ -75,22 +89,22 @@ def search_team(team_name: str, sport: str = "football") -> dict:
     return None
 
 
-def get_team_recent_matches(team_id: int, pages: int = 2) -> list:
-    """Récupère les derniers matchs d'une équipe via l'API SofaScore"""
+def get_team_recent_matches(team_id: int, pages: int = 2, sport: str = "football") -> list:
+    """Récupère les derniers matchs d'une équipe ou joueur"""
     matches = []
-    for page in range(pages):
-        url = f"https://www.sofascore.com/api/v1/team/{team_id}/events/last/{page}"
-        response = cf_requests.get(
-            url,
-            headers=HEADERS,
-            timeout=10,
-            impersonate="chrome120",
-        )
 
+    # Tennis : endpoint joueur différent (same base here but kept for clarity)
+    if sport == "tennis":
+        base_url = f"https://www.sofascore.com/api/v1/team/{team_id}/events/last"
+    else:
+        base_url = f"https://www.sofascore.com/api/v1/team/{team_id}/events/last"
+
+    for page in range(pages):
+        url = f"{base_url}/{page}"
+        response = cf_requests.get(url, impersonate="chrome120", timeout=10)
         if response.status_code != 200:
             print(f"Erreur {response.status_code} pour team_id {team_id} page {page}")
             break
-
         data = response.json()
         events = data.get("events", [])
         if not events:
@@ -119,14 +133,14 @@ def find_recent_matches(team_home: str, team_away: str, sport: str = "football")
 
     if home_team:
         print(f"Trouvé: {home_team['name']} (ID: {home_team['id']})")
-        events = get_team_recent_matches(home_team["id"])
+        events = get_team_recent_matches(home_team["id"], sport=sport)
         # Convertir au format attendu par le pipeline
         for e in events:
             all_events.append({"data": {"event": e}, "url": ""})
 
     if away_team:
         print(f"Trouvé: {away_team['name']} (ID: {away_team['id']})")
-        events = get_team_recent_matches(away_team["id"])
+        events = get_team_recent_matches(away_team["id"], sport=sport)
         for e in events:
             all_events.append({"data": {"event": e}, "url": ""})
 
