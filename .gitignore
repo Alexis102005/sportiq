@@ -37,3 +37,4 @@ __pycache__/
 .vscode/
 data/
 *.egg-info/
+sportiq-app/services.js
