@@ -38,3 +38,5 @@ __pycache__/
 data/
 *.egg-info/
 sportiq-app/services.js
+tmp_probe_sofascore.js
+probe_sofascore.py

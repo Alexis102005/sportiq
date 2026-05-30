@@ -50,7 +50,9 @@ export default function App() {
     setPrediction(null);
     setPredicting(true);
     try {
-      const stats = await getTeamStats(match.team_home, match.team_away, sport);
+      // Pour le tennis, match contient déjà sofascore_home_id / sofascore_away_id
+      // Pour foot/basket, getTeamStats fera la recherche par nom classique
+      const stats = await getTeamStats(match.team_home, match.team_away, sport, match);
       const pred = await predictMatch(match, stats, sport);
       setPrediction(pred);
     } catch (e) {
@@ -100,7 +102,7 @@ export default function App() {
           <Text style={styles.sectionTitle}>{matches.length} match(s)</Text>
           {matches.map((m, i) => (
             <TouchableOpacity key={i} style={styles.card} onPress={() => analyze(m)}>
-              <Text style={styles.league}>{m.league?.replace(/_/g, ' ').toUpperCase()}</Text>
+              <Text style={styles.league}>{m.league?.replace(/_/g, ' ').toUpperCase() || 'MATCH'}</Text>
               <View style={styles.row}>
                 <Text style={styles.team}>{m.team_home}</Text>
                 <Text style={styles.vs}>VS</Text>
